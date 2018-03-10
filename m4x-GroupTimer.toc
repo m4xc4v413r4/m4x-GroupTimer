@@ -1,0 +1,8 @@
+## Interface: 70300
+## Title: m4x Group Timer
+## Notes: Group wide timer
+## Author: m4xc4v413r4
+## Version: @project-version@
+## SavedVariables: m4xGroupTimerDB
+
+m4x-GroupTimer.lua
