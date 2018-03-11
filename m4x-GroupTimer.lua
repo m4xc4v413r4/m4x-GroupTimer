@@ -1,6 +1,7 @@
 m4xGroupTimerDB = m4xGroupTimerDB or {}
 
-local timerdata, timertick, chatinput, wrntext
+local timertick, chatinput, timerdata, wrntext
+local timerrunning = false
 
 local timerframe = CreateFrame("Frame", "TimerGTFrame", UIParent)
 timerframe:SetPoint("BOTTOM", UIParent, "CENTER", 0, 200)
@@ -10,7 +11,7 @@ timerframe:EnableMouse(true);
 timerframe:SetScript("OnDragStart", timerframe.StartMoving);
 timerframe:SetScript("OnDragStop", timerframe.StopMovingOrSizing);
 
-timerframe.Text = timerframe:CreateFontString("TimerGTFrameText", "ARTWORK")
+timerframe.Text = timerframe:CreateFontString("TimerGTFrameText", "OVERLAY")
 timerframe.Text:SetPoint("CENTER", timerframe)
 timerframe.Text:SetFont("Fonts\\FRIZQT__.TTF", 30, "OUTLINE")
 
@@ -25,17 +26,18 @@ buttonframe:SetScript("OnDragStop", buttonframe.StopMovingOrSizing);
 buttonframe.Text:SetFont("Fonts\\FRIZQT__.TTF", 18, "OUTLINE")
 
 local optionbuttonframe = CreateFrame("Button", "OptionButtonGTFrame", buttonframe)
-optionbuttonframe:SetPoint("BOTTOM", buttonframe, "TOP", 0, -5)
+optionbuttonframe:SetPoint("BOTTOM", buttonframe, "TOP", 0, -6)
 optionbuttonframe:SetSize(36, 12)
+optionbuttonframe:Hide()
+
 optionbuttonframe.bg = optionbuttonframe:CreateTexture(nil, "ARTWORK")
 optionbuttonframe.bg:SetTexture("Interface\\PaperDollInfoFrame\\UI-GearManager-FlyoutButton")
 optionbuttonframe.bg:SetTexCoord(0.15625, 0.84375, 0, 0.5)
 optionbuttonframe.bg:SetPoint("CENTER", 0, -2)
 optionbuttonframe.bg:SetSize(38, 16)
-optionbuttonframe:Hide()
 
-local optionframe = CreateFrame("Frame", "OptionGTFrame", buttonframe)
-optionframe:SetPoint("BOTTOM", buttonframe, "TOP", 0, -3)
+local optionframe = CreateFrame("Frame", "OptionGTFrame", optionbuttonframe)
+optionframe:SetPoint("BOTTOM", optionbuttonframe, "TOP", 0, -5)
 optionframe:SetSize(200, 128)
 optionframe:Hide()
 
@@ -107,8 +109,9 @@ local function ClearFrames(clr)
 	_G[clr .. "GTFrame"]:Hide()
 	_G[clr .. "GTFrameText"]:SetText("")
 	_G[clr .. "GTFrameText"]:SetTextColor(1, 0.82, 0)
-	if timertick and (clr == "Timer") then
+	if timerrunning and clr == "Timer" then
 		timertick:Cancel()
+		timerrunning = false
 	end
 end
 
@@ -120,8 +123,6 @@ local function StartButton(btntext)
 			optionbuttonframe:Show()
 		else
 			optionbuttonframe:Hide()
-			optionframe:Hide()
-			optionbuttonframe.bg:SetTexCoord(0.15625, 0.84375, 0, 0.5)
 		end
 	end
 end
@@ -167,7 +168,6 @@ local function SaveOptions()
 	chatinput = ((optionframe.optmin:GetNumber() * 60) + optionframe.optsec:GetNumber())
 	wrntext = optionframe.optwrn:GetText()
 end
-
 
 buttonframe:SetScript("OnClick", function()
 	if UnitIsGroupLeader("player") then
@@ -229,7 +229,12 @@ timerframe:SetScript("OnEvent", function(self, event, ...)
 			if timerdata == 0 then
 				timerdata = 120
 			end
+			if timerframe:IsMovable() then
+				StartFrameMove("Timer")
+				StartFrameMove("Button")
+			end
 			timerframe:Show()
+			timerrunning = true
 			timertick = C_Timer.NewTicker(1, StartTimer, timerdata+1)
 		end
 	elseif event == "READY_CHECK_FINISHED" then
@@ -243,9 +248,13 @@ end)
 
 SlashCmdList["M4XGROUPTIMER"] = function(chat)
 	if chat == "lock" then
-		StartFrameMove("Timer")
-		StartFrameMove("Button")
-		optionbuttonframe:Hide()
+		if not timerrunning then
+			StartFrameMove("Timer")
+			StartFrameMove("Button")
+			optionbuttonframe:Hide()
+		else
+			print("Can't move frames while a countdown is on.")
+		end
 	elseif chat == "hide" then
 		ClearFrames("Timer")
 		ClearFrames("Button")
@@ -258,7 +267,9 @@ SlashCmdList["M4XGROUPTIMER"] = function(chat)
 			StartFrameMove("Timer")
 			StartFrameMove("Button")
 		end
-		StartButton("Start Timer")
+		if not timerrunning then
+			StartButton("Start Timer")
+		end
 	else
 		print("To control the group timer you need to be the leader of a group.")
 		print("For some commands do /gtimer help")

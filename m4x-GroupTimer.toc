@@ -1,6 +1,6 @@
 ## Interface: 70300
 ## Title: m4x Group Timer
-## Notes: Group wide timer
+## Notes: Group wide timer and warning for group farms
 ## Author: m4xc4v413r4
 ## Version: @project-version@
 ## SavedVariables: m4xGroupTimerDB
