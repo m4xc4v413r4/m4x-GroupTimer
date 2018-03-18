@@ -2,6 +2,7 @@ m4xGroupTimerDB = m4xGroupTimerDB or {}
 
 local timertick, chatinput, timerdata, wrntext
 local timerrunning = false
+local timerisenabled = false
 
 local timerframe = CreateFrame("Frame", "TimerGTFrame", UIParent)
 timerframe:SetPoint("BOTTOM", UIParent, "CENTER", 0, 200)
@@ -116,7 +117,7 @@ local function ClearFrames(clr)
 end
 
 local function StartButton(btntext)
-	if UnitIsGroupLeader("player") then
+	if UnitIsGroupLeader("player") and timerisenabled then
 		buttonframe.Text:SetText(btntext)
 		buttonframe:Show()
 		if btntext == "Start Timer" or btntext == "Stop Timer" then
@@ -130,7 +131,10 @@ end
 local function StartWarning()
 	ClearFrames("Timer")
 	RaidNotice_AddMessage(RaidBossEmoteFrame, wrntext, ChatTypeInfo["RAID_WARNING"])
-	PlaySound(SOUNDKIT.RAID_WARNING)
+	if UnitIsGroupLeader("player") then
+		SendChatMessage("m4x-GroupTimer: " .. wrntext, "PARTY")
+	end
+	PlaySound(SOUNDKIT.RAID_BOSS_EMOTE_WARNING)
 	StartButton("Ready Check")
 end
 
@@ -159,7 +163,7 @@ local function StartFrameMove(frm)
 	else
 		_G[frm .. "GTFrame"]:SetMovable(false)
 		_G[frm .. "GTFrame"]:RegisterForDrag()
-		m4xGroupTimerDB[frm .. "Pos"][1], m4xGroupTimerDB[frm .. "Pos"][2], m4xGroupTimerDB[frm .. "Pos"][3], m4xGroupTimerDB[frm .. "Pos"][4], m4xGroupTimerDB[frm .. "Pos"][5] = _G[frm .. "GTFrame"]:GetPoint()
+		m4xGroupTimerDB[frm .. "Pos"][1], _, m4xGroupTimerDB[frm .. "Pos"][3], m4xGroupTimerDB[frm .. "Pos"][4], m4xGroupTimerDB[frm .. "Pos"][5] = _G[frm .. "GTFrame"]:GetPoint()
 		ClearFrames(frm)
 	end
 end
@@ -174,11 +178,13 @@ buttonframe:SetScript("OnClick", function()
 		if buttonframe.Text:GetText() == "Start Timer" then
 			SaveOptions()
 			SendAddonMessage("GroupTimerDATA", chatinput .. ":" .. wrntext, "PARTY")
+			SendChatMessage("m4x-GroupTimer: Start farming", "PARTY")
 			StartButton("Stop Timer")
 		elseif buttonframe.Text:GetText() == "Ready Check" then
 			DoReadyCheck()
 		elseif buttonframe.Text:GetText() == "Stop Timer" then
 			SendAddonMessage("GroupTimerDATA", "STOP", "PARTY")
+			SendChatMessage("m4x-GroupTimer: Stop farming", "PARTY")
 		end
 	end
 end)
@@ -216,26 +222,33 @@ timerframe:SetScript("OnEvent", function(self, event, ...)
 			timerframe:SetPoint(unpack(m4xGroupTimerDB.TimerPos))
 		else
 			m4xGroupTimerDB.ButtonPos = {}
+			m4xGroupTimerDB.ButtonPos[1], _, m4xGroupTimerDB.ButtonPos[3], m4xGroupTimerDB.ButtonPos[4], m4xGroupTimerDB.ButtonPos[5] = buttonframe:GetPoint()
+			m4xGroupTimerDB.ButtonPos[2] = nil
 			m4xGroupTimerDB.TimerPos = {}
+			m4xGroupTimerDB.TimerPos[1], _, m4xGroupTimerDB.TimerPos[3], m4xGroupTimerDB.TimerPos[4], m4xGroupTimerDB.TimerPos[5] = timerframe:GetPoint()
+			m4xGroupTimerDB.TimerPos[2] = nil
 		end
 	elseif event == "CHAT_MSG_ADDON" then
-		local _, msgdata = ...
-		if msgdata == "STOP" then
-			ClearFrames("Timer")
-			StartButton("Start Timer")
-		else
-			timerdata, wrntext = strsplit(":", msgdata, 2)
-			timerdata = tonumber(timerdata)
-			if timerdata == 0 then
-				timerdata = 120
+		local addonprefix, msgdata = ...
+		if addonprefix == "GroupTimerDATA" then
+			if msgdata == "STOP" then
+				ClearFrames("Timer")
+				StartButton("Start Timer")
+			else
+				timerdata, wrntext = strsplit(":", msgdata, 2)
+				timerdata = tonumber(timerdata)
+				if timerdata == 0 then
+					timerdata = 120
+				end
+				if timerframe:IsMovable() then
+					StartFrameMove("Timer")
+					StartFrameMove("Button")
+				end
+				timerframe:Show()
+				timerrunning = true
+				PlaySound(SOUNDKIT.UI_BATTLEGROUND_COUNTDOWN_TIMER)
+				timertick = C_Timer.NewTicker(1, StartTimer, timerdata+1)
 			end
-			if timerframe:IsMovable() then
-				StartFrameMove("Timer")
-				StartFrameMove("Button")
-			end
-			timerframe:Show()
-			timerrunning = true
-			timertick = C_Timer.NewTicker(1, StartTimer, timerdata+1)
 		end
 	elseif event == "READY_CHECK_FINISHED" then
 		ClearFrames("Timer")
@@ -243,6 +256,7 @@ timerframe:SetScript("OnEvent", function(self, event, ...)
 	elseif event == "GROUP_LEFT" or event == "PARTY_LEADER_CHANGED" then
 		ClearFrames("Timer")
 		ClearFrames("Button")
+		timerisenabled = false
 	end
 end)
 
@@ -258,11 +272,13 @@ SlashCmdList["M4XGROUPTIMER"] = function(chat)
 	elseif chat == "hide" then
 		ClearFrames("Timer")
 		ClearFrames("Button")
+		timerisenabled = false
 	elseif chat == "help" then
 		print("/gtimer - Start timer control")
 		print("/gtimer lock - Lock/Unlock timer frames position")
 		print("/gtimer hide - Hide timer frames")
-	elseif UnitIsGroupLeader("player") then
+	elseif chat == "" and UnitIsGroupLeader("player") then
+		timerisenabled = true
 		if timerframe:IsMovable() then
 			StartFrameMove("Timer")
 			StartFrameMove("Button")
